@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Karaokê Estação</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Big+Shoulders+Display:wght@600;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+  :root{
+    --bg:#14110F;
+    --panel:#1F1A16;
+    --panel-2:#26201B;
+    --brass:#C08A3E;
+    --brass-dim:#8A6A38;
+    --signal:#C13B3B;
+    --cream:#EDE6D8;
+    --muted:#8A8078;
+    --line: rgba(237,230,216,0.08);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--cream);font-family:'Rajdhani',sans-serif;}
+  body{min-height:100vh;}
+
+  /* ---- Header / nav: departure board masthead ---- */
+  header.masthead{
+    border-bottom:2px solid var(--brass-dim);
+    padding:18px 20px 14px;
+    display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px;
+    background:linear-gradient(180deg, #191512, #14110F);
+  }
+  .brand-eyebrow{font-family:'JetBrains Mono',monospace; letter-spacing:.28em; font-size:11px; color:var(--brass); text-transform:uppercase;}
+  .brand-title{font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:34px; letter-spacing:.02em; line-height:1; margin-top:4px;}
+  .brand-title span{color:var(--brass);}
+  nav.tabs{display:flex; gap:6px; flex-wrap:wrap;}
+  nav.tabs button{
+    font-family:'Rajdhani',sans-serif; font-weight:600; font-size:14px; letter-spacing:.08em; text-transform:uppercase;
+    background:transparent; border:1px solid var(--line); color:var(--muted);
+    padding:9px 16px; cursor:pointer; transition:.15s;
+  }
+  nav.tabs button:hover{color:var(--cream); border-color:var(--brass-dim);}
+  nav.tabs button.active{background:var(--brass); color:#14110F; border-color:var(--brass);}
+
+  main{max-width:1000px; margin:0 auto; padding:24px 20px 80px;}
+  section.view{display:none;}
+  section.view.active{display:block;}
+
+  h2.section-title{
+    font-family:'Big Shoulders Display',sans-serif; font-weight:700; font-size:22px; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--brass); margin:0 0 4px;
+  }
+  p.section-sub{color:var(--muted); font-size:14px; margin:0 0 20px;}
+
+  .panel{background:var(--panel); border:1px solid var(--line); padding:18px;}
+  .panel + .panel{margin-top:16px;}
+  .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  label.field-label{display:block; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;}
+  input[type=text], input[type=file], select{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--cream);
+    padding:10px 12px; font-family:'Rajdhani',sans-serif; font-size:15px; font-weight:600;
+    width:100%;
+  }
+  input[type=text]:focus, select:focus{outline:1px solid var(--brass); border-color:var(--brass);}
+  button.btn{
+    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:14px; text-transform:uppercase; letter-spacing:.06em;
+    background:var(--brass); color:#14110F; border:none; padding:11px 18px; cursor:pointer;
+  }
+  button.btn:hover{background:#d59a4c;}
+  button.btn.ghost{background:transparent; color:var(--cream); border:1px solid var(--line);}
+  button.btn.ghost:hover{border-color:var(--brass);}
+  button.btn.danger{background:var(--signal); color:#EDE6D8;}
+  button.btn:disabled{opacity:.35; cursor:not-allowed;}
+
+  /* ---- Split-flap board ---- */
+  .flap-row{display:flex; gap:3px; flex-wrap:wrap;}
+  .flap{
+    background:#0F0C0A; border:1px solid #000; color:var(--brass);
+    font-family:'JetBrains Mono',monospace; font-weight:700; font-size:20px;
+    width:24px; height:32px; display:flex; align-items:center; justify-content:center;
+    position:relative; border-radius:2px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+  .flap::after{content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(0,0,0,0.6);}
+  .flap.flip{animation:flipchar .28s ease;}
+  @keyframes flipchar{ 0%{transform:rotateX(0deg);} 50%{transform:rotateX(90deg); opacity:.4;} 100%{transform:rotateX(0deg);} }
+
+  /* ---- Queue list ---- */
+  ul.queue-list{list-style:none; margin:0; padding:0;}
+  ul.queue-list li{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:12px 14px; border-bottom:1px solid var(--line);
+  }
+  ul.queue-list li:last-child{border-bottom:none;}
+  .tag{font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em; padding:3px 7px; border:1px solid var(--brass-dim); color:var(--brass); text-transform:uppercase;}
+  .song-title{font-weight:600; font-size:16px;}
+  .mini{background:transparent; border:1px solid var(--line); color:var(--muted); padding:6px 10px; font-size:12px; cursor:pointer;}
+  .mini:hover{color:var(--signal); border-color:var(--signal);}
+
+  /* ---- Palco / stage ---- */
+  .stage-player{width:100%; aspect-ratio:16/9; background:#000; border:1px solid var(--line);}
+  #ytPlayer{width:100%; height:100%;}
+  .meter-wrap{background:var(--panel-2); height:14px; border:1px solid var(--line); margin-top:10px; overflow:hidden;}
+  .meter-bar{height:100%; width:0%; background:linear-gradient(90deg, var(--brass), var(--signal)); transition:width .06s linear;}
+  .timer{font-family:'JetBrains Mono',monospace; font-size:28px; color:var(--brass); letter-spacing:.05em;}
+  .score-reveal{font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:52px; color:var(--brass); text-align:center; padding:14px 0;}
+
+  /* ---- Placar / leaderboard ---- */
+  table.board{width:100%; border-collapse:collapse;}
+  table.board th{
+    text-align:left; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); padding:8px 10px; border-bottom:1px solid var(--brass-dim);
+  }
+  table.board td{padding:12px 10px; border-bottom:1px solid var(--line); font-weight:600; font-size:16px;}
+  table.board tr:first-child td{color:var(--brass); font-size:19px;}
+  .rank{font-family:'JetBrains Mono',monospace; color:var(--muted);}
+  .podium-badge{font-size:18px; margin-right:6px;}
+
+  .empty-state{padding:40px 20px; text-align:center; color:var(--muted); font-size:14px; border:1px dashed var(--line);}
+  .divider{height:1px; background:var(--line); margin:20px 0;}
+  .helptext{color:var(--muted); font-size:12.5px; line-height:1.5; margin-top:6px;}
+  footer{text-align:center; color:var(--muted); font-size:11px; padding:30px 20px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em;}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div>
+    <div class="brand-eyebrow">Bar &amp; Café · Tatuí</div>
+    <div class="brand-title">KARAOKÊ <span>ESTAÇÃO</span></div>
+  </div>
+  <nav class="tabs">
+    <button data-view="fila" class="active">Fila</button>
+    <button data-view="palco">Palco</button>
+    <button data-view="placar">Placar</button>
+    <button data-view="participantes">Participantes</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- FILA -->
+  <section class="view active" id="view-fila">
+    <h2 class="section-title">Fila de músicas</h2>
+    <p class="section-sub">Busque no YouTube, cole um link (modo on-line) ou envie um arquivo do computador (modo off-line, fica salvo no navegador).</p>
+
+    <div class="panel">
+      <label class="field-label">Chave da API do YouTube (uma vez só)</label>
+      <div class="row">
+        <input type="text" id="apiKeyInput" placeholder="Cole aqui sua chave da YouTube Data API v3" style="flex:1; min-width:220px;">
+        <button class="btn ghost" id="saveApiKeyBtn">Salvar chave</button>
+      </div>
+      <p class="helptext" id="apiKeyStatus">Sem chave salva — a busca por nome fica desativada até você adicionar uma (colar link continua funcionando sem ela). <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:var(--brass);">Como conseguir uma chave grátis →</a></p>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <label class="field-label">Buscar música no YouTube</label>
+      <div class="row">
+        <input type="text" id="ytSearchInput" placeholder="Nome da música ou artista" style="flex:1; min-width:220px;">
+        <button class="btn" id="ytSearchBtn">Buscar</button>
+      </div>
+      <ul class="queue-list" id="searchResults" style="margin-top:10px;"></ul>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="row" style="margin-bottom:12px;">
+        <div style="flex:2; min-width:220px;">
+          <label class="field-label">Ou cole o link do YouTube</label>
+          <input type="text" id="ytUrlInput" placeholder="https://www.youtube.com/watch?v=...">
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn" id="addYtBtn">Adicionar</button>
+        </div>
+      </div>
+      <div class="row">
+        <div style="flex:2; min-width:220px;">
+          <label class="field-label">Arquivo local (offline)</label>
+          <input type="file" id="localFileInput" accept="audio/*,video/*">
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn ghost" id="addLocalBtn">Adicionar arquivo</button>
+        </div>
+      </div>
+      <p class="helptext">Arquivos offline ficam guardados no navegador deste computador (IndexedDB) — continuam disponíveis mesmo sem internet, mas só nesta máquina.</p>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h2 class="section-title" style="font-size:16px;">Fila de hoje</h2>
+      <ul class="queue-list" id="queueList"></ul>
+      <div class="empty-state" id="queueEmpty">Nenhuma música na fila ainda.</div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <h2 class="section-title" style="font-size:16px;">Acervo — músicas já usadas</h2>
+      <p class="helptext" style="margin-top:-8px; margin-bottom:12px;">Fica salvo para sempre. Clique para adicionar de novo à fila sem colar o link outra vez.</p>
+      <ul class="queue-list" id="libraryList"></ul>
+      <div class="empty-state" id="libraryEmpty">O acervo vai se preenchendo conforme você adiciona músicas on-line.</div>
+    </div>
+  </section>
+
+  <!-- PALCO -->
+  <section class="view" id="view-palco">
+    <h2 class="section-title">Palco</h2>
+    <p class="section-sub">Escolha quem vai cantar e a música, então inicie a apresentação.</p>
+
+    <div class="panel">
+      <div class="row">
+        <div style="flex:1; min-width:200px;">
+          <label class="field-label">Participante</label>
+          <select id="stagePlayerSelect"></select>
+        </div>
+        <div style="flex:1; min-width:200px;">
+          <label class="field-label">Música</label>
+          <select id="stageSongSelect"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:16px;">
+      <div class="stage-player" id="stagePlayerBox">
+        <div id="ytPlayer"></div>
+      </div>
+      <div class="row" style="margin-top:14px; justify-content:space-between;">
+        <div class="timer" id="stageTimer">00:00</div>
+        <div class="row">
+          <button class="btn" id="startPerfBtn">Iniciar apresentação</button>
+          <button class="btn danger" id="stopPerfBtn" disabled>Encerrar e pontuar</button>
+        </div>
+      </div>
+      <label class="field-label" style="margin-top:14px;">Nível do microfone</label>
+      <div class="meter-wrap"><div class="meter-bar" id="micMeter"></div></div>
+      <p class="helptext" id="micStatus">Microfone inativo.</p>
+    </div>
+
+    <div class="panel" id="revealPanel" style="display:none; margin-top:16px; text-align:center;">
+      <p class="section-sub" style="margin-bottom:0;">Pontuação de <strong id="revealName"></strong></p>
+      <div class="score-reveal"><div class="flap-row" id="scoreFlaps" style="justify-content:center;"></div></div>
+      <button class="btn" id="saveScoreBtn">Salvar no placar</button>
+    </div>
+  </section>
+
+  <!-- PLACAR -->
+  <section class="view" id="view-placar">
+    <h2 class="section-title">Placar da série</h2>
+    <div class="row" style="justify-content:space-between; margin-bottom:14px;">
+      <div>
+        <label class="field-label">Série atual</label>
+        <input type="text" id="seriesNameInput" placeholder="Ex: Noite de Sexta — 19/07">
+      </div>
+      <div class="row" style="align-self:flex-end;">
+        <button class="btn ghost" id="renameSeriesBtn">Salvar nome</button>
+        <button class="btn danger" id="finishSeriesBtn">Encerrar série &amp; premiar</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <table class="board" id="boardTable">
+        <thead><tr><th>#</th><th>Participante</th><th>Apresentações</th><th>Pontos</th></tr></thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <div class="empty-state" id="boardEmpty">Ainda não há pontuações nesta série.</div>
+    </div>
+  </section>
+
+  <!-- PARTICIPANTES -->
+  <section class="view" id="view-participantes">
+    <h2 class="section-title">Participantes</h2>
+    <div class="panel">
+      <div class="row">
+        <div style="flex:1; min-width:200px;">
+          <label class="field-label">Nome do participante</label>
+          <input type="text" id="playerNameInput" placeholder="Nome">
+        </div>
+        <div style="align-self:flex-end;">
+          <button class="btn" id="addPlayerBtn">Adicionar</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px;">
+      <ul class="queue-list" id="playerList"></ul>
+      <div class="empty-state" id="playerEmpty">Nenhum participante cadastrado.</div>
+    </div>
+  </section>
+
+</main>
+
+<footer>ESTAÇÃO · KARAOKÊ · TATUÍ-SP · FUNCIONA 100% NO NAVEGADOR, SEM CUSTOS</footer>
+
+<script>
+/* =============== ESTADO / PERSISTÊNCIA =============== */
+const STORAGE_KEY = 'estacaoKaraokeState';
+
+// Wrapper seguro: usa localStorage quando disponível; se o navegador/ambiente
+// bloquear (ex: pré-visualizações em sandbox), cai para memória temporária.
+let memoryFallback = {};
+let storageWorks = true;
+try{
+  const t='__test__'; localStorage.setItem(t,'1'); localStorage.removeItem(t);
+}catch(e){ storageWorks = false; }
+function lsGet(key){
+  if(storageWorks){ try{ return localStorage.getItem(key); }catch(e){} }
+  return memoryFallback[key] || null;
+}
+function lsSet(key,val){
+  if(storageWorks){ try{ localStorage.setItem(key,val); return; }catch(e){} }
+  memoryFallback[key]=val;
+}
+
+let state = JSON.parse(lsGet(STORAGE_KEY) || 'null') || {
+  players: [],       // {id, name}
+  queue: [],          // {id, title, type: 'youtube'|'local', ytId, fileKey}
+  library: [],         // {id, title, ytId} — acervo permanente de músicas on-line já usadas
+  seriesName: 'Nova série',
+  performances: []    // {id, playerId, songTitle, score, seriesName, ts}
+};
+if(!state.library) state.library = [];
+function saveState(){ lsSet(STORAGE_KEY, JSON.stringify(state)); }
+function uid(){ return Math.random().toString(36).slice(2,10); }
+
+if(!storageWorks){
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const warn = document.createElement('div');
+    warn.style.cssText = 'background:#C13B3B;color:#EDE6D8;padding:10px 16px;font-family:Rajdhani,sans-serif;font-weight:600;text-align:center;';
+    warn.textContent = 'Este ambiente não permite salvar dados no navegador — abra o arquivo baixado diretamente (fora do chat) para os dados ficarem salvos.';
+    document.body.prepend(warn);
+  });
+}
+
+/* IndexedDB for offline files, with in-memory fallback if unavailable */
+let idbWorks = true;
+let memoryFiles = {};
+let dbPromise = new Promise((resolve)=>{
+  try{
+    const req = indexedDB.open('estacaoKaraokeFiles', 1);
+    req.onupgradeneeded = ()=> req.result.createObjectStore('files');
+    req.onsuccess = ()=> resolve(req.result);
+    req.onerror = ()=> { idbWorks = false; resolve(null); };
+  }catch(e){ idbWorks = false; resolve(null); }
+});
+async function storeFile(key, blob){
+  const db = await dbPromise;
+  if(!db || !idbWorks){ memoryFiles[key] = blob; return; }
+  return new Promise((res,rej)=>{
+    const tx = db.transaction('files','readwrite');
+    tx.objectStore('files').put(blob, key);
+    tx.oncomplete = ()=>res();
+    tx.onerror = ()=>rej(tx.error);
+  });
+}
+async function getFile(key){
+  const db = await dbPromise;
+  if(!db || !idbWorks){ return memoryFiles[key]; }
+  return new Promise((res,rej)=>{
+    const tx = db.transaction('files','readonly');
+    const r = tx.objectStore('files').get(key);
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+
+/* =============== NAVEGAÇÃO =============== */
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='palco') refreshStageSelects();
+    if(btn.dataset.view==='placar') renderBoard();
+  });
+});
+
+/* =============== PARTICIPANTES =============== */
+function renderPlayers(){
+  const list = document.getElementById('playerList');
+  const empty = document.getElementById('playerEmpty');
+  list.innerHTML = '';
+  empty.style.display = state.players.length ? 'none' : 'block';
+  state.players.forEach(p=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="song-title">${escapeHtml(p.name)}</span>`;
+    const btn = document.createElement('button');
+    btn.className='mini'; btn.textContent='Remover';
+    btn.onclick = ()=>{
+      state.players = state.players.filter(x=>x.id!==p.id);
+      saveState(); renderPlayers(); refreshStageSelects();
+    };
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+document.getElementById('addPlayerBtn').onclick = ()=>{
+  const inp = document.getElementById('playerNameInput');
+  const name = inp.value.trim();
+  if(!name) return;
+  state.players.push({id:uid(), name});
+  inp.value='';
+  saveState(); renderPlayers(); refreshStageSelects();
+};
+
+/* =============== CHAVE DA API =============== */
+const API_KEY_STORAGE = 'estacaoKaraokeYtApiKey';
+function getApiKey(){ return lsGet(API_KEY_STORAGE) || ''; }
+function refreshApiKeyStatus(){
+  const key = getApiKey();
+  document.getElementById('apiKeyInput').value = key;
+  const status = document.getElementById('apiKeyStatus');
+  document.getElementById('ytSearchBtn').disabled = !key;
+  status.innerHTML = key
+    ? 'Chave salva — a busca por nome está ativa.'
+    : 'Sem chave salva — a busca por nome fica desativada até você adicionar uma (colar link continua funcionando sem ela). <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:var(--brass);">Como conseguir uma chave grátis →</a>';
+}
+document.getElementById('saveApiKeyBtn').onclick = ()=>{
+  const val = document.getElementById('apiKeyInput').value.trim();
+  lsSet(API_KEY_STORAGE, val);
+  refreshApiKeyStatus();
+};
+
+/* =============== BUSCA NO YOUTUBE =============== */
+async function searchYouTube(){
+  const q = document.getElementById('ytSearchInput').value.trim();
+  const key = getApiKey();
+  const results = document.getElementById('searchResults');
+  if(!q) return;
+  if(!key){ alert('Adicione sua chave da API do YouTube primeiro.'); return; }
+  results.innerHTML = '<li><span class="song-title">Buscando...</span></li>';
+  try{
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(q+' karaoke')}&key=${key}`;
+    const r = await fetch(url);
+    const j = await r.json();
+    if(j.error){ results.innerHTML = `<li><span class="song-title">Erro: ${escapeHtml(j.error.message)}</span></li>`; return; }
+    results.innerHTML = '';
+    (j.items||[]).forEach(item=>{
+      const ytId = item.id.videoId;
+      const title = item.snippet.title;
+      const li = document.createElement('li');
+      li.innerHTML = `<span class="song-title" style="flex:1;">${escapeHtml(title)}</span>`;
+      const btn = document.createElement('button');
+      btn.className='mini'; btn.textContent='Adicionar';
+      btn.onclick = ()=>{ addYoutubeSong(ytId, title); };
+      li.appendChild(btn);
+      results.appendChild(li);
+    });
+    if(!(j.items||[]).length) results.innerHTML = '<li><span class="song-title">Nada encontrado.</span></li>';
+  }catch(e){
+    results.innerHTML = '<li><span class="song-title">Falha na busca. Confira sua conexão e a chave da API.</span></li>';
+  }
+}
+document.getElementById('ytSearchBtn').onclick = searchYouTube;
+document.getElementById('ytSearchInput').addEventListener('keydown', e=>{ if(e.key==='Enter') searchYouTube(); });
+
+/* =============== FILA =============== */
+function extractYouTubeId(url){
+  const m = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+function addYoutubeSong(ytId, title){
+  // adiciona à fila de hoje
+  state.queue.push({id:uid(), title, type:'youtube', ytId});
+  // adiciona (ou reforça) no acervo permanente, sem duplicar
+  if(!state.library.some(s=>s.ytId===ytId)){
+    state.library.push({id:uid(), title, ytId});
+  }
+  saveState(); renderQueue(); renderLibrary(); refreshStageSelects();
+}
+function renderQueue(){
+  const list = document.getElementById('queueList');
+  const empty = document.getElementById('queueEmpty');
+  list.innerHTML='';
+  empty.style.display = state.queue.length ? 'none' : 'block';
+  state.queue.forEach(song=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="tag">${song.type==='youtube'?'On-line':'Off-line'}</span>
+      <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}</span>`;
+    const btn = document.createElement('button');
+    btn.className='mini'; btn.textContent='Remover';
+    btn.onclick = ()=>{
+      state.queue = state.queue.filter(s=>s.id!==song.id);
+      saveState(); renderQueue(); refreshStageSelects();
+    };
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+function renderLibrary(){
+  const list = document.getElementById('libraryList');
+  const empty = document.getElementById('libraryEmpty');
+  list.innerHTML='';
+  empty.style.display = state.library.length ? 'none' : 'block';
+  state.library.slice().reverse().forEach(song=>{
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="tag">Acervo</span><span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}</span>`;
+    const addBtn = document.createElement('button');
+    addBtn.className='mini'; addBtn.textContent='Adicionar à fila';
+    addBtn.onclick = ()=>{
+      state.queue.push({id:uid(), title:song.title, type:'youtube', ytId:song.ytId});
+      saveState(); renderQueue(); refreshStageSelects();
+    };
+    const rmBtn = document.createElement('button');
+    rmBtn.className='mini'; rmBtn.textContent='Remover do acervo';
+    rmBtn.onclick = ()=>{
+      state.library = state.library.filter(s=>s.id!==song.id);
+      saveState(); renderLibrary();
+    };
+    li.appendChild(addBtn);
+    li.appendChild(rmBtn);
+    list.appendChild(li);
+  });
+}
+document.getElementById('addYtBtn').onclick = ()=>{
+  const inp = document.getElementById('ytUrlInput');
+  const url = inp.value.trim();
+  const id = extractYouTubeId(url);
+  if(!id){ alert('Não consegui reconhecer o link do YouTube. Confira e tente novamente.'); return; }
+  fetchYtTitle(id).then(title=>{
+    addYoutubeSong(id, title || ('Vídeo '+id));
+  });
+  inp.value='';
+};
+async function fetchYtTitle(id){
+  try{
+    const r = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`);
+    if(!r.ok) return null;
+    const j = await r.json();
+    return j.title;
+  }catch(e){ return null; }
+}
+document.getElementById('addLocalBtn').onclick = async ()=>{
+  const inp = document.getElementById('localFileInput');
+  const file = inp.files[0];
+  if(!file){ alert('Escolha um arquivo primeiro.'); return; }
+  const key = uid();
+  await storeFile(key, file);
+  state.queue.push({id:uid(), title:file.name, type:'local', fileKey:key, mime:file.type});
+  saveState(); renderQueue(); refreshStageSelects();
+  inp.value='';
+};
+
+/* =============== PALCO / PONTUAÇÃO =============== */
+let ytPlayerObj = null, ytReady = false;
+function loadYtApi(){
+  if(window.YT && window.YT.Player){ ytReady=true; return; }
+  const tag = document.createElement('script');
+  tag.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(tag);
+  window.onYouTubeIframeAPIReady = ()=>{ ytReady = true; };
+}
+loadYtApi();
+
+function refreshStageSelects(){
+  const ps = document.getElementById('stagePlayerSelect');
+  const ss = document.getElementById('stageSongSelect');
+  ps.innerHTML = state.players.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('') || '<option value="">Cadastre um participante</option>';
+  ss.innerHTML = state.queue.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${s.type==='youtube'?'on-line':'off-line'})</option>`).join('') || '<option value="">Adicione uma música à fila</option>';
+}
+
+let audioCtx, analyser, micStream, meterRAF, scoringActive=false;
+let pitchHistory = [], volHistory = [];
+let stageStartTime = 0, timerInterval = null;
+let localMediaEl = null;
+
+function fmtTime(sec){
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+async function startPerformance(){
+  const playerId = document.getElementById('stagePlayerSelect').value;
+  const songId = document.getElementById('stageSongSelect').value;
+  if(!playerId || !songId){ alert('Selecione participante e música.'); return; }
+  const song = state.queue.find(s=>s.id===songId);
+  const stageBox = document.getElementById('stagePlayerBox');
+
+  // set up playback
+  if(song.type==='youtube'){
+    stageBox.innerHTML = '<div id="ytPlayer"></div>';
+    await waitForYtReady();
+    ytPlayerObj = new YT.Player('ytPlayer', {
+      videoId: song.ytId,
+      host: 'https://www.youtube-nocookie.com',
+      playerVars:{autoplay:1, origin: window.location.origin},
+      events:{ 'onStateChange': (e)=>{ if(e.data===YT.PlayerState.ENDED) stopPerformance(); } }
+    });
+  } else {
+    const blob = await getFile(song.fileKey);
+    const url = URL.createObjectURL(blob);
+    const isVideo = (song.mime||'').startsWith('video');
+    stageBox.innerHTML = isVideo
+      ? `<video id="localMedia" src="${url}" style="width:100%;height:100%;" autoplay></video>`
+      : `<audio id="localMedia" src="${url}" autoplay style="width:100%; margin-top:80px;"></audio>`;
+    localMediaEl = document.getElementById('localMedia');
+    localMediaEl.onended = ()=> stopPerformance();
+  }
+
+  // mic capture
+  try{
+    micStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const src = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+    document.getElementById('micStatus').textContent = 'Microfone ativo — cantando e pontuando...';
+  }catch(e){
+    alert('Não consegui acessar o microfone. A pontuação automática precisa dele.');
+    return;
+  }
+
+  pitchHistory = []; volHistory = [];
+  scoringActive = true;
+  stageStartTime = Date.now();
+  timerInterval = setInterval(()=>{ document.getElementById('stageTimer').textContent = fmtTime((Date.now()-stageStartTime)/1000); }, 250);
+  runMeterLoop();
+
+  document.getElementById('startPerfBtn').disabled = true;
+  document.getElementById('stopPerfBtn').disabled = false;
+  document.getElementById('revealPanel').style.display = 'none';
+}
+function waitForYtReady(){
+  return new Promise(res=>{
+    if(ytReady) return res();
+    const iv = setInterval(()=>{ if(ytReady){ clearInterval(iv); res(); } }, 100);
+  });
+}
+
+function autocorrelatePitch(buf, sampleRate){
+  // simple autocorrelation pitch detector
+  const SIZE = buf.length;
+  let rms = 0;
+  for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
+  rms = Math.sqrt(rms/SIZE);
+  if(rms < 0.01) return {freq:-1, rms};
+  let r1=0, r2=SIZE-1, thres=0.2;
+  for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i])<thres){ r1=i; break; } }
+  for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE-i])<thres){ r2=SIZE-i; break; } }
+  const trimmed = buf.slice(r1,r2);
+  const newSize = trimmed.length;
+  const c = new Array(newSize).fill(0);
+  for(let lag=0; lag<newSize; lag++){
+    for(let i=0; i<newSize-lag; i++){ c[lag] += trimmed[i]*trimmed[i+lag]; }
+  }
+  let d=0; while(c[d]>c[d+1]) d++;
+  let maxval=-1, maxpos=-1;
+  for(let i=d;i<newSize;i++){ if(c[i]>maxval){ maxval=c[i]; maxpos=i; } }
+  let T0 = maxpos;
+  if(T0<=0) return {freq:-1, rms};
+  return {freq: sampleRate/T0, rms};
+}
+
+function runMeterLoop(){
+  const data = new Float32Array(analyser.fftSize);
+  function tick(){
+    if(!scoringActive) return;
+    analyser.getFloatTimeDomainData(data);
+    const {freq, rms} = autocorrelatePitch(data, audioCtx.sampleRate);
+    const level = Math.min(1, rms*6);
+    document.getElementById('micMeter').style.width = (level*100)+'%';
+    volHistory.push(rms);
+    if(freq>60 && freq<1200) pitchHistory.push(freq);
+    meterRAF = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function computeScore(){
+  // volume component: how consistently the singer projected above a threshold
+  const voiced = volHistory.filter(v=>v>0.02);
+  const coverage = volHistory.length ? voiced.length/volHistory.length : 0;
+  const avgVol = voiced.length ? voiced.reduce((a,b)=>a+b,0)/voiced.length : 0;
+  const volScore = Math.min(1, avgVol*8) * 0.6 + coverage*0.4;
+
+  // pitch stability component: lower frame-to-frame jitter (in semitones) = more stable
+  let jitterSum=0, jitterN=0;
+  for(let i=1;i<pitchHistory.length;i++){
+    const semis = Math.abs(12*Math.log2(pitchHistory[i]/pitchHistory[i-1]));
+    if(semis < 12){ jitterSum += semis; jitterN++; }
+  }
+  const avgJitter = jitterN ? jitterSum/jitterN : 5;
+  const stabilityScore = Math.max(0, 1 - avgJitter/4);
+
+  const final = Math.round((volScore*0.5 + stabilityScore*0.5) * 1000);
+  return Math.max(0, Math.min(1000, final));
+}
+
+function stopPerformance(){
+  if(!scoringActive) return;
+  scoringActive = false;
+  cancelAnimationFrame(meterRAF);
+  clearInterval(timerInterval);
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) audioCtx.close();
+  if(ytPlayerObj && ytPlayerObj.stopVideo) ytPlayerObj.stopVideo();
+  if(localMediaEl) localMediaEl.pause();
+
+  document.getElementById('micStatus').textContent = 'Microfone inativo.';
+  document.getElementById('startPerfBtn').disabled = false;
+  document.getElementById('stopPerfBtn').disabled = true;
+
+  const score = computeScore();
+  showScoreReveal(score);
+}
+
+function showScoreReveal(score){
+  const playerId = document.getElementById('stagePlayerSelect').value;
+  const songId = document.getElementById('stageSongSelect').value;
+  const player = state.players.find(p=>p.id===playerId);
+  const song = state.queue.find(s=>s.id===songId);
+  document.getElementById('revealName').textContent = player ? player.name : '';
+  document.getElementById('revealPanel').style.display = 'block';
+  const digits = String(score).padStart(4,'0').split('');
+  const wrap = document.getElementById('scoreFlaps');
+  wrap.innerHTML='';
+  digits.forEach((d,i)=>{
+    const f = document.createElement('div');
+    f.className='flap';
+    wrap.appendChild(f);
+    setTimeout(()=>{ f.classList.add('flip'); f.textContent = d; }, i*180+120);
+  });
+  document.getElementById('saveScoreBtn').onclick = ()=>{
+    state.performances.push({id:uid(), playerId, songTitle: song?song.title:'', score, seriesName: state.seriesName, ts: Date.now()});
+    saveState();
+    document.getElementById('revealPanel').style.display='none';
+    alert('Pontuação salva no placar!');
+    renderBoard();
+  };
+}
+document.getElementById('startPerfBtn').onclick = startPerformance;
+document.getElementById('stopPerfBtn').onclick = stopPerformance;
+
+/* =============== PLACAR =============== */
+function renderBoard(){
+  document.getElementById('seriesNameInput').value = state.seriesName;
+  const perfs = state.performances.filter(p=>p.seriesName===state.seriesName);
+  const totals = {};
+  perfs.forEach(p=>{
+    if(!totals[p.playerId]) totals[p.playerId] = {points:0, count:0};
+    totals[p.playerId].points += p.score;
+    totals[p.playerId].count += 1;
+  });
+  const rows = Object.entries(totals).map(([playerId, t])=>{
+    const player = state.players.find(pl=>pl.id===playerId);
+    return {name: player?player.name:'—', points:t.points, count:t.count};
+  }).sort((a,b)=>b.points-a.points);
+
+  const body = document.getElementById('boardBody');
+  const empty = document.getElementById('boardEmpty');
+  body.innerHTML = '';
+  empty.style.display = rows.length ? 'none' : 'block';
+  const medals = ['🥇','🥈','🥉'];
+  rows.forEach((r,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="rank">${i+1}</td><td>${i<3?`<span class="podium-badge">${medals[i]}</span>`:''}${escapeHtml(r.name)}</td><td>${r.count}</td><td>${r.points}</td>`;
+    body.appendChild(tr);
+  });
+}
+document.getElementById('renameSeriesBtn').onclick = ()=>{
+  state.seriesName = document.getElementById('seriesNameInput').value.trim() || 'Nova série';
+  saveState(); renderBoard();
+};
+document.getElementById('finishSeriesBtn').onclick = ()=>{
+  const perfs = state.performances.filter(p=>p.seriesName===state.seriesName);
+  if(!perfs.length){ alert('Ainda não há pontuações nesta série.'); return; }
+  renderBoard();
+  const rows = document.querySelectorAll('#boardBody tr');
+  const winner = rows[0] ? rows[0].children[1].textContent : '—';
+  alert('Série encerrada! Campeão(ã) da noite: ' + winner.replace(/[🥇🥈🥉]/g,'').trim());
+  const nextName = prompt('Nome da próxima série:', 'Nova série');
+  if(nextName) { state.seriesName = nextName; saveState(); renderBoard(); }
+};
+
+/* =============== UTIL =============== */
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* init */
+renderPlayers();
+renderQueue();
+renderLibrary();
+refreshApiKeyStatus();
+refreshStageSelects();
+renderBoard();
+</script>
+</body>
+</html>
