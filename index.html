@@ -162,6 +162,8 @@
     </div>
 
     <div class="panel" style="margin-top:16px;">
+      <label class="field-label">Cantando por conta de quem? (opcional, usado ao adicionar por aqui)</label>
+      <input type="text" id="stageAddByInput" placeholder="Nome do participante (deixe em branco para 'Equipe')" style="margin-bottom:12px;">
       <div class="row" style="margin-bottom:12px;">
         <div style="flex:2; min-width:220px;">
           <label class="field-label">Ou cole o link do YouTube</label>
@@ -181,6 +183,12 @@
         </div>
       </div>
       <p class="helptext">Arquivos offline ficam guardados no navegador deste computador (IndexedDB) — continuam disponíveis mesmo sem internet, mas só nesta máquina.</p>
+    </div>
+
+    <div class="panel" style="margin-top:16px; text-align:center;">
+      <h2 class="section-title" style="font-size:16px;">Participantes entram pelo celular</h2>
+      <p class="helptext" id="participantLinkText" style="margin-bottom:12px;"></p>
+      <img id="participantQr" width="160" height="160" style="border:1px solid var(--line); background:#fff; padding:8px;">
     </div>
 
     <div class="panel" style="margin-top:16px;">
@@ -203,16 +211,8 @@
     <p class="section-sub">Escolha quem vai cantar e a música, então inicie a apresentação.</p>
 
     <div class="panel">
-      <div class="row">
-        <div style="flex:1; min-width:200px;">
-          <label class="field-label">Participante</label>
-          <select id="stagePlayerSelect"></select>
-        </div>
-        <div style="flex:1; min-width:200px;">
-          <label class="field-label">Música</label>
-          <select id="stageSongSelect"></select>
-        </div>
-      </div>
+      <label class="field-label">Próximo da fila (ordem de chegada)</label>
+      <select id="stageQueueSelect"></select>
     </div>
 
     <div class="panel" style="margin-top:16px;">
@@ -285,6 +285,22 @@
 
 <footer>ESTAÇÃO · KARAOKÊ · TATUÍ-SP · FUNCIONA 100% NO NAVEGADOR, SEM CUSTOS</footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+/* =============== FIREBASE (fila e acervo compartilhados) =============== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBvRzwcWkw0SikFxIaAFgeVMMV5TemGtZk",
+  authDomain: "karaoke-estacao-a0771.firebaseapp.com",
+  projectId: "karaoke-estacao-a0771",
+  storageBucket: "karaoke-estacao-a0771.firebasestorage.app",
+  messagingSenderId: "597665195053",
+  appId: "1:597665195053:web:2b0d230436c57a30b184a4"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+</script>
 <script>
 /* =============== ESTADO / PERSISTÊNCIA =============== */
 const STORAGE_KEY = 'estacaoKaraokeState';
@@ -306,14 +322,19 @@ function lsSet(key,val){
 }
 
 let state = JSON.parse(lsGet(STORAGE_KEY) || 'null') || {
-  players: [],       // {id, name}
-  queue: [],          // {id, title, type: 'youtube'|'local', ytId, fileKey}
-  library: [],         // {id, title, ytId} — acervo permanente de músicas on-line já usadas
+  players: [],       // {id, name} — cadastro local usado para o placar
+  queue: [],          // espelho local da fila compartilhada (Firestore)
+  library: [],         // espelho local do acervo compartilhado (Firestore)
   seriesName: 'Nova série',
   performances: []    // {id, playerId, songTitle, score, seriesName, ts}
 };
 if(!state.library) state.library = [];
-function saveState(){ lsSet(STORAGE_KEY, JSON.stringify(state)); }
+if(!state.queue) state.queue = [];
+function saveState(){
+  // não salva queue/library aqui: eles vivem no Firestore e são espelhados localmente
+  const toSave = Object.assign({}, state, {queue:[], library:[]});
+  lsSet(STORAGE_KEY, JSON.stringify(toSave));
+}
 function uid(){ return Math.random().toString(36).slice(2,10); }
 
 if(!storageWorks){
@@ -406,14 +427,22 @@ function refreshApiKeyStatus(){
   const status = document.getElementById('apiKeyStatus');
   document.getElementById('ytSearchBtn').disabled = !key;
   status.innerHTML = key
-    ? 'Chave salva — a busca por nome está ativa.'
+    ? 'Chave salva — a busca por nome está ativa (também disponível na página do participante).'
     : 'Sem chave salva — a busca por nome fica desativada até você adicionar uma (colar link continua funcionando sem ela). <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" style="color:var(--brass);">Como conseguir uma chave grátis →</a>';
 }
 document.getElementById('saveApiKeyBtn').onclick = ()=>{
   const val = document.getElementById('apiKeyInput').value.trim();
   lsSet(API_KEY_STORAGE, val);
+  db.collection('config').doc('settings').set({youtubeApiKey: val}, {merge:true});
   refreshApiKeyStatus();
 };
+// carrega a chave do Firestore (compartilhada) se este navegador ainda não tiver uma
+db.collection('config').doc('settings').get().then(doc=>{
+  if(doc.exists && doc.data().youtubeApiKey && !getApiKey()){
+    lsSet(API_KEY_STORAGE, doc.data().youtubeApiKey);
+    refreshApiKeyStatus();
+  }
+});
 
 /* =============== BUSCA NO YOUTUBE =============== */
 async function searchYouTube(){
@@ -432,11 +461,15 @@ async function searchYouTube(){
     (j.items||[]).forEach(item=>{
       const ytId = item.id.videoId;
       const title = item.snippet.title;
+      const thumb = item.snippet.thumbnails?.default?.url || '';
+      // salva automaticamente no acervo compartilhado, mesmo sem clicar em Adicionar
+      upsertLibrary(ytId, title, thumb);
       const li = document.createElement('li');
-      li.innerHTML = `<span class="song-title" style="flex:1;">${escapeHtml(title)}</span>`;
+      li.innerHTML = `<img src="${thumb}" width="64" height="48" style="object-fit:cover;border:1px solid var(--line);">
+        <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(title)}</span>`;
       const btn = document.createElement('button');
-      btn.className='mini'; btn.textContent='Adicionar';
-      btn.onclick = ()=>{ addYoutubeSong(ytId, title); };
+      btn.className='mini'; btn.textContent='Adicionar à fila';
+      btn.onclick = ()=>{ addYoutubeSong(ytId, title, thumb); };
       li.appendChild(btn);
       results.appendChild(li);
     });
@@ -448,35 +481,36 @@ async function searchYouTube(){
 document.getElementById('ytSearchBtn').onclick = searchYouTube;
 document.getElementById('ytSearchInput').addEventListener('keydown', e=>{ if(e.key==='Enter') searchYouTube(); });
 
-/* =============== FILA =============== */
+/* =============== FILA E ACERVO (Firestore, tempo real) =============== */
 function extractYouTubeId(url){
   const m = url.match(/(?:youtu\.be\/|v=|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/);
   return m ? m[1] : null;
 }
-function addYoutubeSong(ytId, title){
-  // adiciona à fila de hoje
-  state.queue.push({id:uid(), title, type:'youtube', ytId});
-  // adiciona (ou reforça) no acervo permanente, sem duplicar
-  if(!state.library.some(s=>s.ytId===ytId)){
-    state.library.push({id:uid(), title, ytId});
-  }
-  saveState(); renderQueue(); renderLibrary(); refreshStageSelects();
+function upsertLibrary(ytId, title, thumb){
+  db.collection('library').doc(ytId).set({
+    title, ytId, thumb: thumb||'', addedAt: FieldValue.serverTimestamp()
+  }, {merge:true});
+}
+function addYoutubeSong(ytId, title, thumb, playerName){
+  const name = (playerName || document.getElementById('stageAddByInput')?.value.trim() || 'Equipe');
+  db.collection('queue').add({
+    title, ytId, thumb: thumb||'', type:'youtube', playerName:name, submittedAt: FieldValue.serverTimestamp()
+  });
+  upsertLibrary(ytId, title, thumb);
 }
 function renderQueue(){
   const list = document.getElementById('queueList');
   const empty = document.getElementById('queueEmpty');
   list.innerHTML='';
   empty.style.display = state.queue.length ? 'none' : 'block';
-  state.queue.forEach(song=>{
+  state.queue.forEach((song,idx)=>{
     const li = document.createElement('li');
-    li.innerHTML = `<span class="tag">${song.type==='youtube'?'On-line':'Off-line'}</span>
-      <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}</span>`;
+    li.innerHTML = `<span class="tag">${idx+1}º</span>
+      ${song.thumb?`<img src="${song.thumb}" width="56" height="42" style="object-fit:cover;border:1px solid var(--line);">`:''}
+      <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}<br><span class="helptext" style="margin:0;">Cantor(a): ${escapeHtml(song.playerName||'Equipe')}</span></span>`;
     const btn = document.createElement('button');
     btn.className='mini'; btn.textContent='Remover';
-    btn.onclick = ()=>{
-      state.queue = state.queue.filter(s=>s.id!==song.id);
-      saveState(); renderQueue(); refreshStageSelects();
-    };
+    btn.onclick = ()=>{ db.collection('queue').doc(song.docId).delete(); };
     li.appendChild(btn);
     list.appendChild(li);
   });
@@ -486,33 +520,36 @@ function renderLibrary(){
   const empty = document.getElementById('libraryEmpty');
   list.innerHTML='';
   empty.style.display = state.library.length ? 'none' : 'block';
-  state.library.slice().reverse().forEach(song=>{
+  state.library.forEach(song=>{
     const li = document.createElement('li');
-    li.innerHTML = `<span class="tag">Acervo</span><span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}</span>`;
+    li.innerHTML = `${song.thumb?`<img src="${song.thumb}" width="56" height="42" style="object-fit:cover;border:1px solid var(--line);">`:''}
+      <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(song.title)}</span>`;
     const addBtn = document.createElement('button');
     addBtn.className='mini'; addBtn.textContent='Adicionar à fila';
-    addBtn.onclick = ()=>{
-      state.queue.push({id:uid(), title:song.title, type:'youtube', ytId:song.ytId});
-      saveState(); renderQueue(); refreshStageSelects();
-    };
-    const rmBtn = document.createElement('button');
-    rmBtn.className='mini'; rmBtn.textContent='Remover do acervo';
-    rmBtn.onclick = ()=>{
-      state.library = state.library.filter(s=>s.id!==song.id);
-      saveState(); renderLibrary();
-    };
+    addBtn.onclick = ()=>{ addYoutubeSong(song.ytId, song.title, song.thumb); };
     li.appendChild(addBtn);
-    li.appendChild(rmBtn);
     list.appendChild(li);
   });
 }
+// escuta a fila em tempo real — atualiza sozinha quando um participante manda música pelo celular
+db.collection('queue').orderBy('submittedAt','asc').onSnapshot(snap=>{
+  const onlineItems = snap.docs.map(d=>Object.assign({docId:d.id}, d.data()));
+  state.queue = onlineItems.concat(state.localQueue||[]);
+  renderQueue(); refreshStageSelects();
+});
+// escuta o acervo em tempo real
+db.collection('library').orderBy('addedAt','desc').onSnapshot(snap=>{
+  state.library = snap.docs.map(d=>Object.assign({docId:d.id}, d.data()));
+  renderLibrary();
+});
+
 document.getElementById('addYtBtn').onclick = ()=>{
   const inp = document.getElementById('ytUrlInput');
   const url = inp.value.trim();
   const id = extractYouTubeId(url);
   if(!id){ alert('Não consegui reconhecer o link do YouTube. Confira e tente novamente.'); return; }
   fetchYtTitle(id).then(title=>{
-    addYoutubeSong(id, title || ('Vídeo '+id));
+    addYoutubeSong(id, title || ('Vídeo '+id), `https://i.ytimg.com/vi/${id}/default.jpg`);
   });
   inp.value='';
 };
@@ -530,8 +567,11 @@ document.getElementById('addLocalBtn').onclick = async ()=>{
   if(!file){ alert('Escolha um arquivo primeiro.'); return; }
   const key = uid();
   await storeFile(key, file);
-  state.queue.push({id:uid(), title:file.name, type:'local', fileKey:key, mime:file.type});
-  saveState(); renderQueue(); refreshStageSelects();
+  state.localQueue = state.localQueue || [];
+  const name = document.getElementById('stageAddByInput').value.trim() || 'Equipe';
+  state.localQueue.push({docId:'local-'+uid(), title:file.name, type:'local', fileKey:key, mime:file.type, playerName:name});
+  state.queue = state.queue.concat([state.localQueue[state.localQueue.length-1]]);
+  renderQueue(); refreshStageSelects();
   inp.value='';
 };
 
@@ -547,16 +587,21 @@ function loadYtApi(){
 loadYtApi();
 
 function refreshStageSelects(){
-  const ps = document.getElementById('stagePlayerSelect');
-  const ss = document.getElementById('stageSongSelect');
-  ps.innerHTML = state.players.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('') || '<option value="">Cadastre um participante</option>';
-  ss.innerHTML = state.queue.map(s=>`<option value="${s.id}">${escapeHtml(s.title)} (${s.type==='youtube'?'on-line':'off-line'})</option>`).join('') || '<option value="">Adicione uma música à fila</option>';
+  const ss = document.getElementById('stageQueueSelect');
+  ss.innerHTML = state.queue.map((s,idx)=>`<option value="${s.docId}">${idx+1}º — ${escapeHtml(s.playerName||'Equipe')} — ${escapeHtml(s.title)}</option>`).join('') || '<option value="">A fila está vazia</option>';
+}
+function findOrCreatePlayer(name){
+  name = (name||'Equipe').trim() || 'Equipe';
+  let p = state.players.find(pl=>pl.name.toLowerCase()===name.toLowerCase());
+  if(!p){ p = {id:uid(), name}; state.players.push(p); saveState(); renderPlayers(); }
+  return p;
 }
 
 let audioCtx, analyser, micStream, meterRAF, scoringActive=false;
 let pitchHistory = [], volHistory = [];
 let stageStartTime = 0, timerInterval = null;
 let localMediaEl = null;
+let currentPerformance = null;
 
 function fmtTime(sec){
   const m = Math.floor(sec/60), s = Math.floor(sec%60);
@@ -564,10 +609,12 @@ function fmtTime(sec){
 }
 
 async function startPerformance(){
-  const playerId = document.getElementById('stagePlayerSelect').value;
-  const songId = document.getElementById('stageSongSelect').value;
-  if(!playerId || !songId){ alert('Selecione participante e música.'); return; }
-  const song = state.queue.find(s=>s.id===songId);
+  const docId = document.getElementById('stageQueueSelect').value;
+  if(!docId){ alert('Selecione alguém da fila.'); return; }
+  const song = state.queue.find(s=>s.docId===docId);
+  if(!song){ alert('Essa música não está mais na fila.'); return; }
+  const player = findOrCreatePlayer(song.playerName);
+  currentPerformance = {docId, player, song};
   const stageBox = document.getElementById('stagePlayerBox');
 
   // set up playback
@@ -700,10 +747,8 @@ function stopPerformance(){
 }
 
 function showScoreReveal(score){
-  const playerId = document.getElementById('stagePlayerSelect').value;
-  const songId = document.getElementById('stageSongSelect').value;
-  const player = state.players.find(p=>p.id===playerId);
-  const song = state.queue.find(s=>s.id===songId);
+  const player = currentPerformance.player;
+  const song = currentPerformance.song;
   document.getElementById('revealName').textContent = player ? player.name : '';
   document.getElementById('revealPanel').style.display = 'block';
   const digits = String(score).padStart(4,'0').split('');
@@ -716,8 +761,16 @@ function showScoreReveal(score){
     setTimeout(()=>{ f.classList.add('flip'); f.textContent = d; }, i*180+120);
   });
   document.getElementById('saveScoreBtn').onclick = ()=>{
-    state.performances.push({id:uid(), playerId, songTitle: song?song.title:'', score, seriesName: state.seriesName, ts: Date.now()});
+    state.performances.push({id:uid(), playerId:player.id, songTitle: song?song.title:'', score, seriesName: state.seriesName, ts: Date.now()});
     saveState();
+    // tira da fila compartilhada (ou local, se for arquivo offline)
+    if(currentPerformance.docId && !String(currentPerformance.docId).startsWith('local-')){
+      db.collection('queue').doc(currentPerformance.docId).delete();
+    } else {
+      state.localQueue = (state.localQueue||[]).filter(s=>s.docId!==currentPerformance.docId);
+      state.queue = state.queue.filter(s=>s.docId!==currentPerformance.docId);
+      renderQueue(); refreshStageSelects();
+    }
     document.getElementById('revealPanel').style.display='none';
     alert('Pontuação salva no placar!');
     renderBoard();
@@ -774,11 +827,15 @@ function escapeHtml(s){
 
 /* init */
 renderPlayers();
-renderQueue();
 renderLibrary();
 refreshApiKeyStatus();
 refreshStageSelects();
 renderBoard();
+(function initParticipantLink(){
+  const url = new URL('participante.html', window.location.href).toString();
+  document.getElementById('participantLinkText').textContent = url;
+  document.getElementById('participantQr').src = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(url)}`;
+})();
 </script>
 </body>
 </html>
