@@ -53,8 +53,9 @@
 
   <div class="panel">
     <label class="field-label">Buscar música no YouTube</label>
+    <p class="helptext" style="margin-top:0; margin-bottom:10px;">Digite o <strong>nome da música e/ou do artista</strong> e inclua obrigatoriamente a palavra <strong>"Karaokê"</strong> na busca, para trazer só versões próprias pra cantar.</p>
     <div class="row">
-      <input type="text" id="searchInput" placeholder="Nome da música ou artista">
+      <input type="text" id="searchInput" placeholder="Ex: Troca de Calçada Marília Mendonça Karaokê">
       <button class="btn" id="searchBtn" style="width:auto;">Buscar</button>
     </div>
     <ul class="list" id="results"></ul>
@@ -126,7 +127,6 @@ async function search(){
       const ytId = item.id.videoId;
       const title = item.snippet.title;
       const thumb = item.snippet.thumbnails?.default?.url || '';
-      db.collection('library').doc(ytId).set({title, ytId, thumb, addedAt: FieldValue.serverTimestamp()}, {merge:true});
       const li = document.createElement('li');
       li.innerHTML = `<img src="${thumb}" width="64" height="48" style="object-fit:cover;">
         <span class="song-title">${escapeHtml(title)}</span>`;

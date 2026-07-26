@@ -154,8 +154,9 @@
 
     <div class="panel" style="margin-top:16px;">
       <label class="field-label">Buscar música no YouTube</label>
+      <p class="helptext" style="margin-top:0; margin-bottom:10px;">Digite o <strong>nome da música e/ou do artista</strong> e inclua obrigatoriamente a palavra <strong>"Karaokê"</strong> na busca, para trazer só versões próprias pra cantar.</p>
       <div class="row">
-        <input type="text" id="ytSearchInput" placeholder="Nome da música ou artista" style="flex:1; min-width:220px;">
+        <input type="text" id="ytSearchInput" placeholder="Ex: Troca de Calçada Marília Mendonça Karaokê" style="flex:1; min-width:220px;">
         <button class="btn" id="ytSearchBtn">Buscar</button>
       </div>
       <ul class="queue-list" id="searchResults" style="margin-top:10px;"></ul>
@@ -525,7 +526,15 @@ function renderLibrary(){
     const addBtn = document.createElement('button');
     addBtn.className='mini'; addBtn.textContent='Adicionar à fila';
     addBtn.onclick = ()=>{ addYoutubeSong(song.ytId, song.title, song.thumb); };
+    const rmBtn = document.createElement('button');
+    rmBtn.className='mini'; rmBtn.textContent='Excluir do acervo';
+    rmBtn.onclick = ()=>{
+      if(confirm(`Excluir "${song.title}" do acervo permanentemente?`)){
+        db.collection('library').doc(song.docId).delete();
+      }
+    };
     li.appendChild(addBtn);
+    li.appendChild(rmBtn);
     list.appendChild(li);
   });
 }
