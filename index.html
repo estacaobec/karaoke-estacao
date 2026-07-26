@@ -120,8 +120,35 @@
   .helptext{color:var(--muted); font-size:12.5px; line-height:1.5; margin-top:6px;}
   footer{text-align:center; color:var(--muted); font-size:11px; padding:30px 20px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em;}
 </style>
+<style>
+  /* ---- Tela de login ---- */
+  #loginScreen{
+    position:fixed; inset:0; background:var(--bg); z-index:999;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  #loginScreen.hidden{display:none;}
+  .login-box{background:var(--panel); border:1px solid var(--line); padding:28px; width:100%; max-width:340px;}
+  .login-box .brand-title{margin-bottom:18px;}
+  .login-error{color:var(--signal); font-size:13px; margin-top:10px; min-height:16px;}
+  .logout-btn{background:transparent; border:1px solid var(--line); color:var(--muted); padding:8px 14px; font-family:'Rajdhani',sans-serif; font-weight:600; font-size:12px; text-transform:uppercase; cursor:pointer;}
+  .logout-btn:hover{border-color:var(--signal); color:var(--signal);}
+</style>
 </head>
 <body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="brand-eyebrow">Bar &amp; Café · Tatuí</div>
+    <div class="brand-title">KARAOKÊ <span>ESTAÇÃO</span></div>
+    <p class="section-sub" style="margin-bottom:16px;">Acesso restrito à equipe do bar.</p>
+    <label class="field-label">E-mail</label>
+    <input type="text" id="loginEmail" placeholder="seu@email.com" style="margin-bottom:12px;">
+    <label class="field-label">Senha</label>
+    <input type="text" id="loginPass" placeholder="Senha" style="margin-bottom:16px;">
+    <button class="btn" id="loginBtn" style="width:100%;">Entrar</button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+</div>
 
 <header class="masthead">
   <div>
@@ -133,6 +160,7 @@
     <button data-view="palco">Palco</button>
     <button data-view="placar">Placar</button>
     <button data-view="participantes">Participantes</button>
+    <button class="logout-btn" id="logoutBtn" type="button">Sair</button>
   </nav>
 </header>
 
@@ -288,6 +316,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /* =============== FIREBASE (fila e acervo compartilhados) =============== */
 const firebaseConfig = {
@@ -300,9 +329,28 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 const FieldValue = firebase.firestore.FieldValue;
 </script>
 <script>
+/* =============== LOGIN =============== */
+document.getElementById('loginBtn').onclick = doLogin;
+document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+function doLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if(!email || !pass){ errEl.textContent = 'Preencha e-mail e senha.'; return; }
+  auth.signInWithEmailAndPassword(email, pass).catch(err=>{
+    errEl.textContent = 'E-mail ou senha incorretos.';
+  });
+}
+document.getElementById('logoutBtn').onclick = ()=> auth.signOut();
+auth.onAuthStateChanged(user=>{
+  document.getElementById('loginScreen').classList.toggle('hidden', !!user);
+});
+
 /* =============== ESTADO / PERSISTÊNCIA =============== */
 const STORAGE_KEY = 'estacaoKaraokeState';
 
