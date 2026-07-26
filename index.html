@@ -462,8 +462,6 @@ async function searchYouTube(){
       const ytId = item.id.videoId;
       const title = item.snippet.title;
       const thumb = item.snippet.thumbnails?.default?.url || '';
-      // salva automaticamente no acervo compartilhado, mesmo sem clicar em Adicionar
-      upsertLibrary(ytId, title, thumb);
       const li = document.createElement('li');
       li.innerHTML = `<img src="${thumb}" width="64" height="48" style="object-fit:cover;border:1px solid var(--line);">
         <span class="song-title" style="flex:1; margin:0 10px;">${escapeHtml(title)}</span>`;
