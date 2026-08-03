@@ -104,6 +104,17 @@
   .timer{font-family:'JetBrains Mono',monospace; font-size:28px; color:var(--brass); letter-spacing:.05em;}
   .score-reveal{font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:52px; color:var(--brass); text-align:center; padding:14px 0;}
 
+  /* ---- Painel de apresentação em tela cheia ---- */
+  #performancePanel:fullscreen,
+  #performancePanel:-webkit-full-screen{
+    width:100vw; height:100vh; display:flex; flex-direction:column; justify-content:center;
+    background:var(--bg); padding:28px 32px; box-sizing:border-box;
+  }
+  #performancePanel:fullscreen .stage-player,
+  #performancePanel:-webkit-full-screen .stage-player{
+    flex:1; aspect-ratio:unset; min-height:0;
+  }
+
   /* ---- Placar / leaderboard ---- */
   table.board{width:100%; border-collapse:collapse;}
   table.board th{
@@ -261,7 +272,7 @@
       </div>
     </div>
 
-    <div class="panel" style="margin-top:16px;">
+    <div class="panel" id="performancePanel" style="margin-top:16px;">
       <div class="stage-player" id="stagePlayerBox">
         <div id="ytPlayer"></div>
       </div>
@@ -717,6 +728,19 @@ function startCallSequence(item){
   };
 }
 
+function enterFullscreen(el){
+  el = el || document.getElementById('stagePlayerBox');
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+  if(req){ try{ req.call(el).catch(()=>{}); }catch(e){} }
+}
+function exitFullscreenIfActive(){
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+  if(fsEl){
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if(exit){ try{ exit.call(document).catch(()=>{}); }catch(e){} }
+  }
+}
+
 async function beginPerformance(docId){
   clearInterval(callCountdownTimer);
   document.getElementById('callPanel').style.display='none';
@@ -727,6 +751,7 @@ async function beginPerformance(docId){
   currentPerformance = {docId, player, song};
   stageState = 'performing';
   const stageBox = document.getElementById('stagePlayerBox');
+  enterFullscreen(document.getElementById('performancePanel')); // expande assim que a apresentação começa (precisa ser chamado logo aqui, antes dos awaits, pra não perder a permissão do navegador)
 
   // set up playback
   if(song.type==='youtube'){
@@ -865,6 +890,7 @@ function stopPerformance(){
   if(audioCtx) audioCtx.close();
   if(ytPlayerObj && ytPlayerObj.stopVideo) ytPlayerObj.stopVideo();
   if(localMediaEl) localMediaEl.pause();
+  exitFullscreenIfActive();
 
   document.getElementById('micStatus').textContent = 'Microfone inativo.';
   document.getElementById('stopPerfBtn').disabled = true;
