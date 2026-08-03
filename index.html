@@ -237,11 +237,28 @@
   <!-- PALCO -->
   <section class="view" id="view-palco">
     <h2 class="section-title">Palco</h2>
-    <p class="section-sub">Escolha quem vai cantar e a música, então inicie a apresentação.</p>
+    <p class="section-sub">A chamada e a pontuação acontecem automaticamente. Use a seleção manual só pra furar a fila.</p>
 
-    <div class="panel">
-      <label class="field-label">Próximo da fila (ordem de chegada)</label>
-      <select id="stageQueueSelect"></select>
+    <div class="panel" id="callPanel" style="display:none; text-align:center;">
+      <p class="section-sub" style="margin-bottom:6px;">Chamando ao palco</p>
+      <div class="brand-title" id="callName" style="font-size:36px; margin:6px 0;"></div>
+      <p class="song-title" id="callSong" style="margin:0 0 18px;"></p>
+      <div class="timer" id="callCountdown" style="font-size:52px;">20</div>
+      <div style="margin-top:16px;">
+        <button class="btn" id="callStartBtn">Iniciar apresentação agora</button>
+      </div>
+    </div>
+
+    <div class="panel" id="emptyQueuePanel" style="display:none; text-align:center;">
+      <p class="section-sub" style="margin:0;">A fila está vazia — aguardando novas músicas dos participantes.</p>
+    </div>
+
+    <div class="panel" id="manualPanel">
+      <label class="field-label">Seleção manual (furar a fila)</label>
+      <div class="row">
+        <select id="stageQueueSelect" style="flex:1;"></select>
+        <button class="btn ghost" id="startPerfBtn">Iniciar direto</button>
+      </div>
     </div>
 
     <div class="panel" style="margin-top:16px;">
@@ -251,7 +268,6 @@
       <div class="row" style="margin-top:14px; justify-content:space-between;">
         <div class="timer" id="stageTimer">00:00</div>
         <div class="row">
-          <button class="btn" id="startPerfBtn">Iniciar apresentação</button>
           <button class="btn danger" id="stopPerfBtn" disabled>Encerrar e pontuar</button>
         </div>
       </div>
@@ -263,7 +279,8 @@
     <div class="panel" id="revealPanel" style="display:none; margin-top:16px; text-align:center;">
       <p class="section-sub" style="margin-bottom:0;">Pontuação de <strong id="revealName"></strong></p>
       <div class="score-reveal"><div class="flap-row" id="scoreFlaps" style="justify-content:center;"></div></div>
-      <button class="btn" id="saveScoreBtn">Salvar no placar</button>
+      <p class="helptext" id="revealNextText">Salvando e chamando o próximo automaticamente...</p>
+      <button class="btn ghost" id="skipWaitBtn">Pular espera</button>
     </div>
   </section>
 
@@ -590,7 +607,7 @@ function renderLibrary(){
 db.collection('queue').orderBy('submittedAt','asc').onSnapshot(snap=>{
   const onlineItems = snap.docs.map(d=>Object.assign({docId:d.id}, d.data()));
   state.queue = onlineItems.concat(state.localQueue||[]);
-  renderQueue(); refreshStageSelects();
+  renderQueue(); refreshStageSelects(); maybeAutoCallNext();
 });
 // escuta o acervo em tempo real
 db.collection('library').orderBy('addedAt','desc').onSnapshot(snap=>{
@@ -626,7 +643,7 @@ document.getElementById('addLocalBtn').onclick = async ()=>{
   const name = document.getElementById('stageAddByInput').value.trim() || 'Equipe';
   state.localQueue.push({docId:'local-'+uid(), title:file.name, type:'local', fileKey:key, mime:file.type, playerName:name});
   state.queue = state.queue.concat([state.localQueue[state.localQueue.length-1]]);
-  renderQueue(); refreshStageSelects();
+  renderQueue(); refreshStageSelects(); maybeAutoCallNext();
   inp.value='';
 };
 
@@ -657,30 +674,86 @@ let pitchHistory = [], volHistory = [];
 let stageStartTime = 0, timerInterval = null;
 let localMediaEl = null;
 let currentPerformance = null;
+let stageState = 'idle'; // idle | calling | performing | revealing
+let callCountdownTimer = null;
+let revealTimeout = null;
 
 function fmtTime(sec){
   const m = Math.floor(sec/60), s = Math.floor(sec%60);
   return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
 }
 
-async function startPerformance(){
-  const docId = document.getElementById('stageQueueSelect').value;
-  if(!docId){ alert('Selecione alguém da fila.'); return; }
+/* ---- Chamada automática do próximo da fila ---- */
+function maybeAutoCallNext(){
+  if(stageState!=='idle') return; // já tem alguém cantando, sendo chamado ou sendo pontuado
+  if(!state.queue.length){
+    document.getElementById('callPanel').style.display='none';
+    document.getElementById('emptyQueuePanel').style.display='block';
+    return;
+  }
+  document.getElementById('emptyQueuePanel').style.display='none';
+  startCallSequence(state.queue[0]);
+}
+function startCallSequence(item){
+  stageState = 'calling';
+  const panel = document.getElementById('callPanel');
+  panel.style.display = 'block';
+  document.getElementById('callName').textContent = item.playerName || 'Equipe';
+  document.getElementById('callSong').textContent = item.title;
+  let secondsLeft = 20;
+  document.getElementById('callCountdown').textContent = secondsLeft;
+  clearInterval(callCountdownTimer);
+  callCountdownTimer = setInterval(()=>{
+    secondsLeft--;
+    document.getElementById('callCountdown').textContent = Math.max(secondsLeft,0);
+    if(secondsLeft<=0){
+      clearInterval(callCountdownTimer);
+      beginPerformance(item.docId);
+    }
+  }, 1000);
+  document.getElementById('callStartBtn').onclick = ()=>{
+    clearInterval(callCountdownTimer);
+    beginPerformance(item.docId);
+  };
+}
+
+async function beginPerformance(docId){
+  clearInterval(callCountdownTimer);
+  document.getElementById('callPanel').style.display='none';
+  document.getElementById('emptyQueuePanel').style.display='none';
   const song = state.queue.find(s=>s.docId===docId);
-  if(!song){ alert('Essa música não está mais na fila.'); return; }
+  if(!song){ stageState='idle'; maybeAutoCallNext(); return; }
   const player = findOrCreatePlayer(song.playerName);
   currentPerformance = {docId, player, song};
+  stageState = 'performing';
   const stageBox = document.getElementById('stagePlayerBox');
 
   // set up playback
   if(song.type==='youtube'){
     stageBox.innerHTML = '<div id="ytPlayer"></div>';
     await waitForYtReady();
+    let openedExternally = false;
     ytPlayerObj = new YT.Player('ytPlayer', {
       videoId: song.ytId,
       host: 'https://www.youtube-nocookie.com',
       playerVars:{autoplay:1, origin: window.location.origin},
-      events:{ 'onStateChange': (e)=>{ if(e.data===YT.PlayerState.ENDED) stopPerformance(); } }
+      events:{
+        'onStateChange': (e)=>{ if(e.data===YT.PlayerState.ENDED) stopPerformance(); },
+        'onError': (e)=>{
+          // 101 e 150 = o dono do vídeo bloqueou a incorporação fora do YouTube
+          if((e.data===101 || e.data===150) && !openedExternally){
+            openedExternally = true;
+            const win = window.open(`https://www.youtube.com/watch?v=${song.ytId}`, '_blank');
+            const blockedMsg = win ? '' : '<br><span style="color:var(--signal);">Seu navegador bloqueou a abertura automática — clique no link abaixo:</span><br>';
+            stageBox.innerHTML = `<div style="display:flex; align-items:center; justify-content:center; height:100%; text-align:center; padding:20px;">
+              Essa música não pode tocar aqui dentro — abrimos ela numa nova aba do YouTube.${blockedMsg}<br>
+              <a href="https://www.youtube.com/watch?v=${song.ytId}" target="_blank" style="color:var(--brass); font-weight:700;">Abrir "${escapeHtml(song.title)}" no YouTube →</a><br><br>
+              Dê play lá. A pontuação pelo microfone continua rodando normalmente aqui.<br><br>
+              Quando a música acabar, clique em <strong>"Encerrar e pontuar"</strong>.
+            </div>`;
+          }
+        }
+      }
     });
   } else {
     const blob = await getFile(song.fileKey);
@@ -704,6 +777,7 @@ async function startPerformance(){
     document.getElementById('micStatus').textContent = 'Microfone ativo — cantando e pontuando...';
   }catch(e){
     alert('Não consegui acessar o microfone. A pontuação automática precisa dele.');
+    stageState = 'idle';
     return;
   }
 
@@ -713,7 +787,6 @@ async function startPerformance(){
   timerInterval = setInterval(()=>{ document.getElementById('stageTimer').textContent = fmtTime((Date.now()-stageStartTime)/1000); }, 250);
   runMeterLoop();
 
-  document.getElementById('startPerfBtn').disabled = true;
   document.getElementById('stopPerfBtn').disabled = false;
   document.getElementById('revealPanel').style.display = 'none';
 }
@@ -794,8 +867,8 @@ function stopPerformance(){
   if(localMediaEl) localMediaEl.pause();
 
   document.getElementById('micStatus').textContent = 'Microfone inativo.';
-  document.getElementById('startPerfBtn').disabled = false;
   document.getElementById('stopPerfBtn').disabled = true;
+  stageState = 'revealing';
 
   const score = computeScore();
   showScoreReveal(score);
@@ -815,7 +888,8 @@ function showScoreReveal(score){
     wrap.appendChild(f);
     setTimeout(()=>{ f.classList.add('flip'); f.textContent = d; }, i*180+120);
   });
-  document.getElementById('saveScoreBtn').onclick = ()=>{
+  function finalizeAndAdvance(){
+    clearTimeout(revealTimeout);
     state.performances.push({id:uid(), playerId:player.id, songTitle: song?song.title:'', score, seriesName: state.seriesName, ts: Date.now()});
     saveState();
     // tira da fila compartilhada (ou local, se for arquivo offline)
@@ -827,11 +901,19 @@ function showScoreReveal(score){
       renderQueue(); refreshStageSelects();
     }
     document.getElementById('revealPanel').style.display='none';
-    alert('Pontuação salva no placar!');
     renderBoard();
-  };
+    stageState = 'idle';
+    maybeAutoCallNext();
+  }
+  document.getElementById('skipWaitBtn').onclick = finalizeAndAdvance;
+  revealTimeout = setTimeout(finalizeAndAdvance, 3500);
 }
-document.getElementById('startPerfBtn').onclick = startPerformance;
+document.getElementById('startPerfBtn').onclick = ()=>{
+  const docId = document.getElementById('stageQueueSelect').value;
+  if(!docId){ alert('Selecione alguém da fila.'); return; }
+  clearInterval(callCountdownTimer);
+  beginPerformance(docId);
+};
 document.getElementById('stopPerfBtn').onclick = stopPerformance;
 
 /* =============== PLACAR =============== */

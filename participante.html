@@ -48,7 +48,10 @@
 <main>
   <div class="panel">
     <label class="field-label">Seu nome</label>
-    <input type="text" id="nameInput" placeholder="Como você quer aparecer no palco">
+    <input type="text" id="nameInput" placeholder="Como você quer aparecer no palco" style="margin-bottom:12px;">
+    <label class="field-label">Seu CPF</label>
+    <input type="text" id="cpfInput" placeholder="000.000.000-00" inputmode="numeric" maxlength="14">
+    <p class="helptext">Usado só pra garantir que cada pessoa cante uma música por vez, sem furar a vez de quem já está na fila.</p>
   </div>
 
   <div class="panel">
@@ -95,13 +98,41 @@ function showToast(msg){
   setTimeout(()=>{ t.style.display='none'; }, 2500);
 }
 
-/* nome fica salvo neste celular pra não digitar toda vez */
+/* nome e CPF ficam salvos neste celular pra não digitar toda vez */
 const NAME_KEY='estacaoParticipantName';
+const CPF_KEY='estacaoParticipantCpf';
 let nameWorks = true;
 try{ localStorage.setItem('__t','1'); localStorage.removeItem('__t'); }catch(e){ nameWorks=false; }
 const nameInput = document.getElementById('nameInput');
-if(nameWorks){ nameInput.value = localStorage.getItem(NAME_KEY) || ''; }
+const cpfInput = document.getElementById('cpfInput');
+if(nameWorks){
+  nameInput.value = localStorage.getItem(NAME_KEY) || '';
+  cpfInput.value = localStorage.getItem(CPF_KEY) || '';
+}
 nameInput.addEventListener('change', ()=>{ if(nameWorks) localStorage.setItem(NAME_KEY, nameInput.value.trim()); });
+cpfInput.addEventListener('input', ()=>{
+  let d = cpfInput.value.replace(/\D/g,'').slice(0,11);
+  let masked = d;
+  if(d.length>9) masked = `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}`;
+  else if(d.length>6) masked = `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+  else if(d.length>3) masked = `${d.slice(0,3)}.${d.slice(3)}`;
+  cpfInput.value = masked;
+});
+cpfInput.addEventListener('change', ()=>{ if(nameWorks) localStorage.setItem(CPF_KEY, cpfInput.value.trim()); });
+
+function onlyDigits(s){ return (s||'').replace(/\D/g,''); }
+function isValidCPF(cpf){
+  cpf = onlyDigits(cpf);
+  if(cpf.length!==11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let sum=0;
+  for(let i=0;i<9;i++) sum += parseInt(cpf[i])*(10-i);
+  let d1 = (sum*10)%11; if(d1===10) d1=0;
+  if(d1!==parseInt(cpf[9])) return false;
+  sum=0;
+  for(let i=0;i<10;i++) sum += parseInt(cpf[i])*(11-i);
+  let d2 = (sum*10)%11; if(d2===10) d2=0;
+  return d2===parseInt(cpf[10]);
+}
 
 /* chave da API do YouTube compartilhada, configurada uma vez no palco */
 let apiKey = '';
@@ -144,12 +175,23 @@ async function search(){
 document.getElementById('searchBtn').onclick = search;
 document.getElementById('searchInput').addEventListener('keydown', e=>{ if(e.key==='Enter') search(); });
 
-function addToQueue(ytId, title, thumb){
+async function addToQueue(ytId, title, thumb){
   const name = nameInput.value.trim();
+  const cpfDigits = onlyDigits(cpfInput.value);
   if(!name){ showToast('Digite seu nome primeiro!'); nameInput.focus(); return; }
-  if(nameWorks) localStorage.setItem(NAME_KEY, name);
+  if(!isValidCPF(cpfDigits)){ showToast('CPF inválido — confira os números.'); cpfInput.focus(); return; }
+  if(nameWorks){
+    localStorage.setItem(NAME_KEY, name);
+    localStorage.setItem(CPF_KEY, cpfInput.value.trim());
+  }
+  // impede que a mesma pessoa fure a fila colocando várias músicas seguidas
+  const existing = await db.collection('queue').where('cpf','==',cpfDigits).limit(1).get();
+  if(!existing.empty){
+    showToast('Você já está na fila! Espera sua vez pra adicionar outra música.');
+    return;
+  }
   db.collection('queue').add({
-    title, ytId, thumb: thumb||'', type:'youtube', playerName:name, submittedAt: FieldValue.serverTimestamp()
+    title, ytId, thumb: thumb||'', type:'youtube', playerName:name, cpf:cpfDigits, submittedAt: FieldValue.serverTimestamp()
   });
   showToast(`Você entrou na fila com "${title}"`);
 }
