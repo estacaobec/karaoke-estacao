@@ -104,14 +104,13 @@
   .timer{font-family:'JetBrains Mono',monospace; font-size:28px; color:var(--brass); letter-spacing:.05em;}
   .score-reveal{font-family:'Big Shoulders Display',sans-serif; font-weight:800; font-size:52px; color:var(--brass); text-align:center; padding:14px 0;}
 
-  /* ---- Painel de apresentação em tela cheia ---- */
-  #performancePanel:fullscreen,
-  #performancePanel:-webkit-full-screen{
+  /* ---- Painel de apresentação em tela cheia (funciona mesmo sem clique, ex: início automático) ---- */
+  #performancePanel.stage-fullscreen{
+    position:fixed; inset:0; z-index:500;
     width:100vw; height:100vh; display:flex; flex-direction:column; justify-content:center;
     background:var(--bg); padding:28px 32px; box-sizing:border-box;
   }
-  #performancePanel:fullscreen .stage-player,
-  #performancePanel:-webkit-full-screen .stage-player{
+  #performancePanel.stage-fullscreen .stage-player{
     flex:1; aspect-ratio:unset; min-height:0;
   }
 
@@ -730,10 +729,15 @@ function startCallSequence(item){
 
 function enterFullscreen(el){
   el = el || document.getElementById('stagePlayerBox');
+  // expansão por CSS: funciona sempre, com ou sem clique direto (ex: início automático pelos 20s)
+  el.classList.add('stage-fullscreen');
+  // bônus: tenta também a tela cheia "de verdade" do navegador (esconde a barra) — só funciona se houver um clique direto
   const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
   if(req){ try{ req.call(el).catch(()=>{}); }catch(e){} }
 }
 function exitFullscreenIfActive(){
+  const el = document.getElementById('performancePanel');
+  if(el) el.classList.remove('stage-fullscreen');
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
   if(fsEl){
     const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
