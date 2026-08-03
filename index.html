@@ -455,15 +455,14 @@ async function getFile(key){
 }
 
 /* =============== NAVEGAÇÃO =============== */
+function switchToTab(view){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.querySelectorAll('section.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  if(view==='palco') refreshStageSelects();
+  if(view==='placar') renderBoard();
+}
 document.querySelectorAll('nav.tabs button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('section.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
-    if(btn.dataset.view==='palco') refreshStageSelects();
-    if(btn.dataset.view==='placar') renderBoard();
-  });
+  btn.addEventListener('click', ()=> switchToTab(btn.dataset.view));
 });
 
 /* =============== PARTICIPANTES =============== */
@@ -706,6 +705,7 @@ function maybeAutoCallNext(){
 }
 function startCallSequence(item){
   stageState = 'calling';
+  switchToTab('palco'); // garante que a tela esteja na aba certa, senão a tela cheia não aparece
   const panel = document.getElementById('callPanel');
   panel.style.display = 'block';
   document.getElementById('callName').textContent = item.playerName || 'Equipe';
@@ -754,6 +754,7 @@ async function beginPerformance(docId){
   const player = findOrCreatePlayer(song.playerName);
   currentPerformance = {docId, player, song};
   stageState = 'performing';
+  switchToTab('palco');
   const stageBox = document.getElementById('stagePlayerBox');
   enterFullscreen(document.getElementById('performancePanel')); // expande assim que a apresentação começa (precisa ser chamado logo aqui, antes dos awaits, pra não perder a permissão do navegador)
 
