@@ -892,14 +892,14 @@ function showScoreReveal(score){
     clearTimeout(revealTimeout);
     state.performances.push({id:uid(), playerId:player.id, songTitle: song?song.title:'', score, seriesName: state.seriesName, ts: Date.now()});
     saveState();
-    // tira da fila compartilhada (ou local, se for arquivo offline)
+    // tira da fila localmente na hora (não espera o Firestore confirmar, senão o próximo é chamado com a lista desatualizada)
+    state.queue = state.queue.filter(s=>s.docId!==currentPerformance.docId);
     if(currentPerformance.docId && !String(currentPerformance.docId).startsWith('local-')){
       db.collection('queue').doc(currentPerformance.docId).delete();
     } else {
       state.localQueue = (state.localQueue||[]).filter(s=>s.docId!==currentPerformance.docId);
-      state.queue = state.queue.filter(s=>s.docId!==currentPerformance.docId);
-      renderQueue(); refreshStageSelects();
     }
+    renderQueue(); refreshStageSelects();
     document.getElementById('revealPanel').style.display='none';
     renderBoard();
     stageState = 'idle';
